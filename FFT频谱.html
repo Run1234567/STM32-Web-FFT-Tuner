@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>FFT 频谱</title>
+    <style>
+        body { background-color: #1a1a1a; color: white; text-align: center; font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; }
+        #canvas-container { margin-top: 10px; display: flex; justify-content: center; }
+        canvas { background-color: #000; border: 2px solid #444; border-radius: 12px; box-shadow: 0 0 30px rgba(0, 255, 255, 0.2); }
+        
+        /* 状态显示 */
+        #status { margin: 10px 0; font-size: 14px; color: #aaa; }
+        
+        /* 核心频率与音调显示 */
+        .display-panel { background: #252525; padding: 20px; border-radius: 15px; display: inline-block; min-width: 400px; margin-bottom: 20px; border: 1px solid #333; }
+        #freqBox { font-size: 24px; color: #888; margin-bottom: 5px; }
+        #noteBox { font-size: 64px; font-weight: bold; color: #00ffcc; text-shadow: 0 0 20px rgba(0, 255, 204, 0.5); }
+        
+        /* 控制区 */
+        button { padding: 12px 30px; font-size: 18px; cursor: pointer; background: linear-gradient(135deg, #007bff, #0056b3); color: white; border: none; border-radius: 8px; transition: 0.2s; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,123,255,0.4); }
+        .controls { margin: 15px 0; color: #ccc; }
+        input[type="range"] { width: 200px; vertical-align: middle; }
+    </style>
+</head>
+<body>
+
+    <div class="display-panel">
+        <div id="freqBox">频率: -- Hz</div>
+        <div id="noteBox">--</div>
+    </div>
+
+    <div>
+        <button id="connectBtn">🔌 连接单片机 (1152000)</button>
+    </div>
+    <div id="status">等待串口连接...</div>
+
+    <div class="controls">
+        🔍 灵敏度: <input type="range" id="scaleSlider" min="0.1" max="10" step="0.1" value="1.0">
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="fftCanvas" width="1024" height="400"></canvas>
+    </div>
+
+    <script>
+        const connectBtn = document.getElementById('connectBtn');
+        const statusDiv = document.getElementById('status');
+        const freqBox = document.getElementById('freqBox');
+        const noteBox = document.getElementById('noteBox');
+        const canvas = document.getElementById('fftCanvas');
+        const ctx = canvas.getContext('2d');
+        const scaleSlider = document.getElementById('scaleSlider');
+
+        // 配置参数 (需与单片机一致)
+        const SAMPLING_RATE = 10000; 
+        const FFT_TOTAL_POINTS = 1024;
+        const DISPLAY_POINTS = 512; 
+        const FREQ_RES = SAMPLING_RATE / FFT_TOTAL_POINTS; // 9.765625 Hz
+
+        // 音符对应表
+        const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+        let drawScale = 1.0;
+        scaleSlider.oninput = (e) => drawScale = e.target.value;
+
+        // 频率转音名核心算法
+        function getNoteFromFreq(freq) {
+            if (freq < 16) return "--"; // 频率太低不识别
+            // 音乐公式: n = 12 * log2(f / 440) + 69
+            const n = Math.round(12 * Math.log2(freq / 440) + 69);
+            const noteName = NOTE_NAMES[n % 12];
+            const octave = Math.floor(n / 12) - 1;
+            return noteName + octave;
+        }
+
+        connectBtn.onclick = async () => {
+            try {
+                const port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 1152000 });
+                
+                statusDiv.innerText = "✅ 状态：已连接";
+                statusDiv.style.color = "#00ff00";
+                connectBtn.style.display = "none";
+
+                const textDecoder = new TextDecoderStream();
+                port.readable.pipeTo(textDecoder.writable);
+                const reader = textDecoder.readable.getReader();
+
+                let buffer = "";
+                let fftData = [];
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += value;
+                    let lines = buffer.split(/\r?\n/);
+                    buffer = lines.pop();
+
+                    for (let line of lines) {
+                        let text = line.trim();
+                        if (text === "START") {
+                            // 收到帧头，如果数组里已经有数据，尝试画出来
+                            if (fftData.length >= 200) {
+                                processAndDraw(fftData);
+                            }
+                            fftData = []; // 强制清空，重新对齐
+                            continue;
+                        }
+
+                        let val = parseFloat(text);
+                        if (!isNaN(val)) {
+                            fftData.push(val);
+                            // 兜底逻辑：如果没收到START但凑够了点数也画
+                            if (fftData.length >= DISPLAY_POINTS) {
+                                processAndDraw(fftData);
+                                fftData = [];
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                statusDiv.innerText = "❌ 连接失败: " + err;
+            }
+        };
+
+        function processAndDraw(data) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. 寻找最强频率 (跳过直流分量)
+            let maxAmp = 0;
+            let maxIdx = 0;
+            for (let i = 2; i < data.length; i++) {
+                if (data[i] > maxAmp) {
+                    maxAmp = data[i];
+                    maxIdx = i;
+                }
+            }
+
+            // 2. 更新文字显示
+            if (maxAmp > 150) { // 阈值过滤杂音
+                const finalFreq = maxIdx * FREQ_RES;
+                freqBox.innerText = `频率: ${finalFreq.toFixed(1)} Hz`;
+                noteBox.innerText = getNoteFromFreq(finalFreq);
+            } else {
+                freqBox.innerText = `频率: -- Hz`;
+                noteBox.innerText = "--";
+            }
+
+            // 3. 绘制频谱
+            const barWidth = canvas.width / data.length;
+            for (let i = 0; i < data.length; i++) {
+                const h = (data[i] * drawScale) / 50; // 根据实际幅值调整缩小倍数
+                const x = i * barWidth;
+                
+                // 颜色随频率变化
+                ctx.fillStyle = `hsl(${(i/data.length)*360}, 70%, 50%)`;
+                ctx.fillRect(x, canvas.height - h, barWidth - 1, h);
+            }
+        }
+    </script>
+</body>
+</html>
