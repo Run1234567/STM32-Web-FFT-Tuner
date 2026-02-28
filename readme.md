@@ -85,7 +85,6 @@ graph LR
     E -->|对数公式计算| G[音调/音名显示]
 ```
 
-
 ## 📦 快速开始
 
 ### 1. 硬件连接
@@ -115,7 +114,12 @@ graph LR
 
 ## 📸 效果展示
 
----
+```
+## 📺 效果演示 (Demo)
+
+[![Bilibili](https://img.shields.io/badge/bilibili-观看完整演示视频-fb7299?style=for-the-badge&logo=bilibili&logoColor=white)](https://www.bilibili.com/video/BV1zgAaz2EmX/
+```
+
 
 ## 🤝 贡献与反馈
 
@@ -173,11 +177,17 @@ graph LR
 **Code snippet**
 
 ```
+
+```
+
 graph LR
-    A[麦克风模块] -->|模拟电压| B(STM32 ADC+DMA)
-    B -->|原始数据| C{CMSIS-DSP FFT}
-    C -->|频谱幅值| D[串口高速外发]
-    D -->|START 协议包| E[Chrome 浏览器]
-    E -->|JavaScript 纠错| F[Canvas 彩虹频谱]
-    E -->|对数公式计算| G[音调/音名显示]
+A[麦克风模块] -->|模拟电压| B(STM32 ADC+DMA)
+B -->|原始数据| C{CMSIS-DSP FFT}
+C -->|频谱幅值| D[串口高速外发]
+D -->|START 协议包| E[Chrome 浏览器]
+E -->|JavaScript 纠错| F[Canvas 彩虹频谱]
+E -->|对数公式计算| G[音调/音名显示]
+
+```
+
 ```
