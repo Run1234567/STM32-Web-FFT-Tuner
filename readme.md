@@ -112,12 +112,9 @@ graph LR
 
 ---
 
-## 📸 效果展示
+## 📺 效果演示 (Demo)
 
-```
 [![Bilibili](https://img.shields.io/badge/Bilibili-观看完整演示视频-fb7299?style=for-the-badge&logo=bilibili&logoColor=white)](https://www.bilibili.com/video/BV1zgAaz2EmX/)
-```
-
 
 ## 🤝 贡献与反馈
 
